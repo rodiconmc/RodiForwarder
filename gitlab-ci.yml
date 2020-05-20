@@ -1,0 +1,30 @@
+stages:
+  - build:compile
+  - build:image
+
+build:compile:
+    image: openjdk:11
+    stage: build:compile
+    tags:
+        - rodi-general
+    script: 
+        - "./gradlew build"
+        - "mv build/install/rodi-forwarder/ rodi-forwarder"
+    artifacts:
+        paths: ['rodi-forwarder']
+
+
+build:image:
+    image:
+        name: gcr.io/kaniko-project/executor:debug
+        entrypoint: [""]
+    stage: build:image
+    tags:
+        - rodi-general
+    variables:
+        IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+
+    script: 
+        - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+        - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/Dockerfile --destination $IMAGE_TAG
+
