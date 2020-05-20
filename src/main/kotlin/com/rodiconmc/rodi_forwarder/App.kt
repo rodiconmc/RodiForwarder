@@ -15,8 +15,8 @@ fun main() {
     }
 
     var port = 25565
-    if (System.getenv("LISTENPORT").toInt() > 0) {
+    if (System.getenv("LISTENPORT")?.toInt() ?: 0 > 0) {
         port = System.getenv("LISTENPORT").toInt()
     }
-    ForwarderServer(port).run()
+    ForwarderServer.run(port)
 }

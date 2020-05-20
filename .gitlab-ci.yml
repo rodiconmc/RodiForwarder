@@ -8,13 +8,13 @@ build:compile:
     tags:
         - rodi-general
     script: 
-        - "./gradlew build"
+        - "./gradlew installDist"
         - "mv build/install/rodi-forwarder/ rodi-forwarder"
     artifacts:
         paths: ['rodi-forwarder']
 
 
-build:image:
+build:image:gitlab:
     image:
         name: gcr.io/kaniko-project/executor:debug
         entrypoint: [""]
@@ -24,7 +24,21 @@ build:image:
     variables:
         IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
 
-    script: 
+    script:
         - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+        - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/Dockerfile --destination $IMAGE_TAG
+
+build:image:dockerhub:
+    image:
+        name: gcr.io/kaniko-project/executor:debug
+        entrypoint: [""]
+    stage: build:image
+    tags:
+        - rodi-general
+    variables:
+        IMAGE_TAG: $DOCKER_HUB_REGISTRY$CI_COMMIT_REF_NAME:$CI_COMMIT_SHORT_SHA
+
+    script: 
+        - echo "{\"auths\":{\"$DOCKER_HUB_URL\":{\"username\":\"$DOCKER_HUB_USERNAME\",\"password\":\"$DOCKER_HUB_PASSWORD\"}}}" > /kaniko/.docker/config.json
         - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/Dockerfile --destination $IMAGE_TAG
 

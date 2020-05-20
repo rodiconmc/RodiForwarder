@@ -7,11 +7,11 @@ import io.netty.channel.socket.SocketChannel
 import io.netty.channel.socket.nio.NioSocketChannel
 
 
-object BackendClient {
+object Downstream {
 
     private val workerGroup: EventLoopGroup = NioEventLoopGroup()
 
-    fun connectToServer(host: String, port: Int, session: ForwarderSession): Channel {
+    fun connectToServer(host: String, port: Int, session: MinecraftClientSession): Channel {
         try {
             val b = Bootstrap()
             b.group(workerGroup)
@@ -19,7 +19,7 @@ object BackendClient {
             b.option(ChannelOption.SO_KEEPALIVE, true)
             b.handler(object : ChannelInitializer<SocketChannel>() {
                 public override fun initChannel(ch: SocketChannel) {
-                    ch.pipeline().addLast(LoopbackHandler(session, ch))
+                    ch.pipeline().addLast(MinecraftServerSession(session, ch))
                 }
             })
 

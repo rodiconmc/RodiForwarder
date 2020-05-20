@@ -9,12 +9,9 @@ import io.netty.channel.socket.SocketChannel
 import io.netty.channel.socket.nio.NioServerSocketChannel
 
 
-/**
- * Discards any incoming data.
- */
-class ForwarderServer(private val port: Int) {
+object ForwarderServer {
 
-    fun run() {
+    fun run(port: Int) {
         val bossGroup: EventLoopGroup = NioEventLoopGroup()
         val workerGroup: EventLoopGroup = NioEventLoopGroup()
         try {
@@ -23,7 +20,7 @@ class ForwarderServer(private val port: Int) {
                     .channel(NioServerSocketChannel::class.java)
                     .childHandler(object : ChannelInitializer<SocketChannel>() {
                         public override fun initChannel(ch: SocketChannel) {
-                            ch.pipeline().addLast(ForwarderSession(ch))
+                            ch.pipeline().addLast(MinecraftClientSession(ch))
                         }
                     })
                     .option(ChannelOption.SO_BACKLOG, 128)
