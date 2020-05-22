@@ -1,24 +1,37 @@
 package com.rodiconmc.rodi_forwarder
 
-import io.netty.channel.Channel
-import io.netty.channel.ChannelHandlerContext
-import io.netty.channel.ChannelInboundHandlerAdapter
+import io.netty.channel.socket.SocketChannel
+import io.netty.util.concurrent.Future
 
 
-class MinecraftServerSession(private val clientSession: MinecraftClientSession, channel: Channel) : ChannelInboundHandlerAdapter() {
+class MinecraftServerSession(val clientSession: MinecraftClientSession, private val channel: SocketChannel): MinecraftSession() {
+
+    /**
+     * The address this session is associated with
+     */
+    override val address: String
+        get() = channel.remoteAddress().toString()
 
     init {
-        channel.closeFuture().addListener {
-            clientSession.channel.close()
+        channel.pipeline().addLast(ForwarderHandler(clientSession))
+        clientSession.onDisconnect {
+            this.channel.close()
+            logger.info("Client at ${clientSession.address} disconnected")
         }
     }
 
-    override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
-        clientSession.channel.writeAndFlush(msg)
+    /**
+     * Sends data to this server
+     */
+    override fun send(data: Any) {
+        channel.writeAndFlush(data)
     }
 
-    override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
-        cause.printStackTrace()
-        ctx.close()
+    /**
+     * Add a callback to when this server disconnects
+     */
+    override fun onDisconnect(callback: (Future<in Void>) -> Unit) {
+        channel.closeFuture().addListener(callback)
     }
+
 }

@@ -11,26 +11,31 @@ import io.netty.channel.socket.nio.NioServerSocketChannel
 
 object ForwarderServer {
 
+    /**
+     * Starts the server to accept incoming connections
+     */
     fun run(port: Int) {
         val bossGroup: EventLoopGroup = NioEventLoopGroup()
         val workerGroup: EventLoopGroup = NioEventLoopGroup()
+
         try {
-            val b = ServerBootstrap()
-            b.group(bossGroup, workerGroup)
+            val bootstrap = ServerBootstrap().group(bossGroup, workerGroup)
                     .channel(NioServerSocketChannel::class.java)
                     .childHandler(object : ChannelInitializer<SocketChannel>() {
                         public override fun initChannel(ch: SocketChannel) {
-                            ch.pipeline().addLast(MinecraftClientSession(ch))
+                            MinecraftClientSession(ch)
                         }
                     })
                     .option(ChannelOption.SO_BACKLOG, 128)
                     .childOption(ChannelOption.SO_KEEPALIVE, true)
 
             // Bind and start to accept incoming connections.
-            val f = b.bind(port).sync()
+            val channel = bootstrap.bind(port).sync().channel()
+            logger.info("RodiForwarder started on port $port")
 
             // Wait until the server socket is closed.
-            f.channel().closeFuture().sync()
+            channel.closeFuture().sync()
+            logger.error("RodiForwarder socket closed")
         } finally {
             workerGroup.shutdownGracefully()
             bossGroup.shutdownGracefully()

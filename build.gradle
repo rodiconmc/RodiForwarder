@@ -3,6 +3,9 @@ plugins {
     id 'application'
 }
 
+group "com.rodiconmc"
+version "1.1.0"
+
 repositories {
     jcenter()
 }
@@ -11,6 +14,8 @@ dependencies {
     implementation platform('org.jetbrains.kotlin:kotlin-bom')
     implementation 'org.jetbrains.kotlin:kotlin-stdlib-jdk8'
     implementation 'io.netty:netty-all:4.1.29.Final'
+    implementation 'org.slf4j:slf4j-api:1.7.25'
+    compile 'org.slf4j:slf4j-simple:1.6.1'
 
 }
 
@@ -20,8 +25,10 @@ application {
 
 jar {
     manifest {
-        attributes(
-                'Main-Class': application.mainClassName
-        )
+        attributes 'Main-Class': application.mainClassName
     }
+}
+
+run {
+    environment "RODIFORWARD", "localhost;127.0.0.1:35565"
 }

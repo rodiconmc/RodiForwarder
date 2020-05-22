@@ -1,94 +1,80 @@
 package com.rodiconmc.rodi_forwarder
 
-import io.netty.buffer.ByteBuf
-import io.netty.channel.Channel
-import io.netty.channel.ChannelHandlerContext
-import io.netty.channel.ChannelInboundHandlerAdapter
+import io.netty.channel.socket.SocketChannel
+import io.netty.util.concurrent.Future
 import java.net.URI
 
+/**
+ * Represents a connection to a minecraft client
+ */
+class MinecraftClientSession(private val channel: SocketChannel): MinecraftSession() {
 
-class MinecraftClientSession(val channel: Channel) : ChannelInboundHandlerAdapter() {
+    var destinationSession: MinecraftServerSession? = null
+        private set
 
-    private var byteAccumulator: ByteBuf? = null
-    var downstreamServerChannel: Channel? = null
+    /**
+     * The address this session is associated with
+     */
+    override val address: String
+        get() = channel.remoteAddress().toString()
+
+    private lateinit var hostname: String
 
     init {
-        channel.closeFuture().addListener {
-            downstreamServerChannel?.close()
-        }
+        channel.pipeline().addLast(HandshakePacketHandler(this::error, this::foundHostname))
+        logger.info("Client at ${channel.remoteAddress()} connected, awaiting handshake")
     }
 
-    override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
-        val data = msg as ByteBuf
-        if (downstreamServerChannel == null) {
-            if (byteAccumulator == null) byteAccumulator = ctx.alloc().compositeBuffer()
-            byteAccumulator = ctx.alloc().compositeBuffer().addComponent(true, byteAccumulator).addComponent(true, data).consolidate()
-
-            try {
-                tryReadPacket(byteAccumulator!!.copy())
-            } catch(e: InvalidDataException) {
+    /**
+     * Gets called if the HandshakePacketHandler gets an error
+     */
+    private fun error(e: Exception) {
+        when (e) {
+            is HandshakePacketHandler.InvalidDataException -> {
                 channel.close()
+                logger.warn("Client at ${channel.remoteAddress()} sent invalid data")
             }
+            else -> throw e
+        }
+    }
 
+    /**
+     * Send data to this minecraft client
+     */
+    override fun send(data: Any) {
+        channel.writeAndFlush(data)
+    }
+
+    /**
+     * Add a callback to when this client disconnects
+     */
+    override fun onDisconnect(callback: (Future<in Void>) -> Unit) {
+        channel.closeFuture().addListener(callback)
+    }
+
+    /**
+     * Gets called when a handshake packet is received
+     */
+    private fun foundHostname(hostname: String) {
+        if (destinationSession != null) return
+        this.hostname = hostname
+        if (hostMap.containsKey(hostname)) {
+            val destination = URI("tcp://" + hostMap[hostname])
+            val destinationSession = Downstream.connectToServer(destination.host, destination.port, this)
+            destinationSession.onDisconnect { this.channel.close() }
+            channel.pipeline().addLast(ForwarderHandler(destinationSession))
+            val oldHandler = channel.pipeline().remove(HandshakePacketHandler::class.java)
+            val remainingData = oldHandler.getRemainingBuf()
+            destinationSession.send(remainingData)
+            logger.info("Client at ${channel.remoteAddress()} connected with $hostname and is being forwarded to ${destinationSession.address}")
+            this.destinationSession = destinationSession
         } else {
-            downstreamServerChannel!!.writeAndFlush(msg)
+            logger.warn("Client ${channel.remoteAddress()} tried to connect using ${hostname}, which has no mapping assigned.")
         }
     }
 
-    private fun tryReadPacket(buf: ByteBuf): Boolean {
-        if (!buf.isReadable) return false
-        val original = buf.copy()
-        try {
-            val size = readVarInt(buf)
-            val packetId = readVarInt(buf)
-            if (packetId != 0x00) throw InvalidDataException()
-            val protocolVersion = readVarInt(buf)
-            val serverAddress = readString(buf)
-            if (hostMap.containsKey(serverAddress)) {
-                val destination = URI("tcp://" + hostMap[serverAddress])
-                downstreamServerChannel = Downstream.connectToServer(destination.host, destination.port, this)
-                downstreamServerChannel!!.writeAndFlush(original)
+    private fun destinationConnectedSuccessful(destination: MinecraftServerSession) {
+        destinationSession = destination
 
-            } else return true
-        } catch (e: MissingDataException) {}
-        return false
     }
-
-
-    private fun readVarInt(buf: ByteBuf): Int {
-        try {
-            var reachedEnd = false
-            var result = 0
-            while (!reachedEnd) {
-                val byte = buf.readByte()
-                result += byte.toInt() and 0b01111111
-                if (byte.toInt() shr 7 == 0) reachedEnd = true
-            }
-            return result
-        } catch (e: IndexOutOfBoundsException) {
-            throw MissingDataException()
-        }
-    }
-
-    private fun readString(buf: ByteBuf): String {
-        try {
-            val size = readVarInt(buf)
-            var string = ""
-            for (i in 1..size) {
-                string += buf.readByte().toChar()
-            }
-            return string
-        } catch (e: IndexOutOfBoundsException) {
-            throw MissingDataException()
-        }
-    }
-
-    override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
-        // Close the connection when an exception is raised.
-        cause.printStackTrace()
-        ctx.close()
-    }
-
-    class MissingDataException : Exception()
-    class InvalidDataException: Exception()
 }

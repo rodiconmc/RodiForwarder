@@ -9,23 +9,16 @@ import io.netty.channel.socket.nio.NioSocketChannel
 
 object Downstream {
 
-    private val workerGroup: EventLoopGroup = NioEventLoopGroup()
-
-    fun connectToServer(host: String, port: Int, session: MinecraftClientSession): Channel {
-        try {
-            val b = Bootstrap()
-            b.group(workerGroup)
-            b.channel(NioSocketChannel::class.java)
-            b.option(ChannelOption.SO_KEEPALIVE, true)
-            b.handler(object : ChannelInitializer<SocketChannel>() {
-                public override fun initChannel(ch: SocketChannel) {
-                    ch.pipeline().addLast(MinecraftServerSession(session, ch))
-                }
-            })
-
-            // Start the client.
-            val f: ChannelFuture = b.connect(host, port).sync()
-            return f.channel()
-        } finally {}
+    fun connectToServer(host: String, port: Int, clientSession: MinecraftClientSession): MinecraftServerSession {
+        val workerGroup: EventLoopGroup = NioEventLoopGroup()
+        val bootstrap = Bootstrap()
+        bootstrap.group(workerGroup)
+        bootstrap.channel(NioSocketChannel::class.java)
+        bootstrap.option(ChannelOption.SO_KEEPALIVE, true)
+        bootstrap.handler(object: ChannelInitializer<SocketChannel>() {
+            override fun initChannel(ch: SocketChannel) {}
+        })
+        val channel = bootstrap.connect(host, port).sync().channel() as SocketChannel
+        return MinecraftServerSession(clientSession, channel)
     }
 }
