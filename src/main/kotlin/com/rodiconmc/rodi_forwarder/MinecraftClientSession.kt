@@ -22,7 +22,6 @@ class MinecraftClientSession(private val channel: SocketChannel): MinecraftSessi
 
     init {
         channel.pipeline().addLast(HandshakePacketHandler(this::error, this::foundHostname))
-        logger.info("Client at ${channel.remoteAddress()} connected, awaiting handshake")
     }
 
     /**
@@ -70,6 +69,7 @@ class MinecraftClientSession(private val channel: SocketChannel): MinecraftSessi
             this.destinationSession = destinationSession
         } else {
             logger.warn("Client ${channel.remoteAddress()} tried to connect using ${hostname}, which has no mapping assigned.")
+            this.channel.close()
         }
     }
 
