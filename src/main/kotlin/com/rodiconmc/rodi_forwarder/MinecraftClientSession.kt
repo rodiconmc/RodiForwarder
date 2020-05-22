@@ -30,8 +30,8 @@ class MinecraftClientSession(private val channel: SocketChannel): MinecraftSessi
     private fun error(e: Exception) {
         when (e) {
             is HandshakePacketHandler.InvalidDataException -> {
-                channel.close()
                 logger.warn("Client at ${channel.remoteAddress()} sent invalid data")
+                channel.close()
             }
             else -> throw e
         }
